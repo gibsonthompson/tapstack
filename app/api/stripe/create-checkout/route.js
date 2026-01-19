@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { createClient } from '@supabase/supabase-js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
 export async function POST(request) {
   try {
@@ -13,9 +21,34 @@ export async function POST(request) {
         { status: 400 }
       )
     }
+
+    // Get agency email from database
+    const supabase = getSupabase()
+    const { data: agency, error: agencyError } = await supabase
+      .from('agencies')
+      .select('owner_email, name')
+      .eq('id', agencyId)
+      .single()
+
+    if (agencyError || !agency) {
+      return NextResponse.json(
+        { error: 'Agency not found' },
+        { status: 404 }
+      )
+    }
+
+    // Create Stripe customer first (required for Accounts V2 in test mode)
+    const customer = await stripe.customers.create({
+      email: agency.owner_email,
+      name: agency.name,
+      metadata: {
+        agencyId,
+      },
+    })
     
-    // Create Stripe checkout session
+    // Create Stripe checkout session with customer
     const session = await stripe.checkout.sessions.create({
+      customer: customer.id,  // Use the customer we just created
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
@@ -37,6 +70,15 @@ export async function POST(request) {
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/signup?canceled=true`,
       allow_promotion_codes: true,
     })
+
+    // Save customer ID to agency record
+    await supabase
+      .from('agencies')
+      .update({ 
+        stripe_customer_id: customer.id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', agencyId)
     
     return NextResponse.json({ url: session.url })
     
