@@ -33,7 +33,7 @@ export async function POST(request) {
       metadata: {
         agencyId,
       },
-      success_url: `https://gorocketsolutions.com/agency/login?welcome=true`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/signup?canceled=true`,
       allow_promotion_codes: true,
     })
