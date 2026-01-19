@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Space Grotesk', sans-serif;
+  
+  --color-dark: #171515;
+  --color-cream: #fcfcfd;
+  --color-lime: #c1ff72;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-dark);
+  color: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-lime);
+  color: var(--color-dark);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-lime);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* Custom Classes */
+@layer components {
+  .container-custom {
+    @apply max-w-7xl mx-auto px-5 md:px-8;
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-lime to-lime-dark;
+  }
+  
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-8 py-4 bg-lime text-dark font-semibold rounded-xl transition-all duration-300 hover:bg-lime-dark hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto;
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent border-2 border-cream/20 text-cream font-semibold rounded-xl transition-all duration-300 hover:border-lime hover:text-lime w-full sm:w-auto;
+  }
+  
+  .card {
+    @apply bg-dark-light border border-cream/10 rounded-2xl p-6 md:p-8 transition-all duration-300 hover:border-lime/30;
+  }
+  
+  .card-glow {
+    @apply relative overflow-hidden;
+  }
+  
+  .card-glow::before {
+    content: '';
+    @apply absolute -top-1/2 -left-1/2 w-full h-full bg-lime/5 rounded-full blur-3xl opacity-0 transition-opacity duration-500;
+  }
+  
+  .card-glow:hover::before {
+    @apply opacity-100;
+  }
+  
+  .section-label {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-lime/10 border border-lime/20 rounded-full text-lime text-sm font-medium mb-6;
+  }
+  
+  .noise-bg {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+  }
+}
+
+/* Animations */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Focus styles */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  @apply outline-none ring-2 ring-lime ring-offset-2 ring-offset-dark;
+}
+
+/* Smooth image loading */
+img {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+img[data-loading="true"] {
+  opacity: 0;
+}
