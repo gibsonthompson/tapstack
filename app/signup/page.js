@@ -704,14 +704,12 @@ async function extractColorsFromImage(imageSrc) {
     img.onload = () => {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
-      const size = 150 // Resize for performance
+      const size = 150
       canvas.width = size
       canvas.height = size
       ctx.drawImage(img, 0, 0, size, size)
       
       const imageData = ctx.getImageData(0, 0, size, size).data
-      
-      // Detect background color from edges
       const bgColor = detectBackgroundColor(ctx, size)
       
       const colorCounts = {}
@@ -722,20 +720,19 @@ async function extractColorsFromImage(imageSrc) {
         const b = imageData[i + 2]
         const a = imageData[i + 3]
         
-        // Skip transparent
         if (a < 128) continue
         
-        // Skip colors too close to background
+        // Skip background colors
         if (bgColor) {
           const dist = Math.sqrt(
             Math.pow(r - bgColor.r, 2) + 
             Math.pow(g - bgColor.g, 2) + 
             Math.pow(b - bgColor.b, 2)
           )
-          if (dist < 60) continue
+          if (dist < 50) continue
         }
         
-        // Quantize to reduce noise
+        // Quantize
         const qr = Math.min(240, Math.floor(r / 16) * 16)
         const qg = Math.min(240, Math.floor(g / 16) * 16)
         const qb = Math.min(240, Math.floor(b / 16) * 16)
@@ -743,30 +740,60 @@ async function extractColorsFromImage(imageSrc) {
         colorCounts[key] = (colorCounts[key] || 0) + 1
       }
       
-      // Convert to HSL and filter for vibrant colors
-      const colors = Object.entries(colorCounts)
+      // Convert to HSL with hue
+      const allColors = Object.entries(colorCounts)
         .map(([key, count]) => {
           const [r, g, b] = key.split(',').map(Number)
-          const max = Math.max(r, g, b) / 255
-          const min = Math.min(r, g, b) / 255
-          const l = (max + min) / 2
-          const s = max === min ? 0 : l > 0.5 
-            ? (max - min) / (2 - max - min) 
-            : (max - min) / (max + min)
-          return { r, g, b, count, saturation: s, lightness: l }
+          const { h, s, l } = rgbToHsl(r, g, b)
+          return { r, g, b, count, hue: h, saturation: s, lightness: l }
         })
-        // Filter: must be saturated and not too light/dark
-        .filter(c => c.saturation > 0.2 && c.lightness > 0.15 && c.lightness < 0.85 && c.count > 20)
-        // Sort by saturation * log(count) to favor vibrant + common
-        .sort((a, b) => (b.saturation * Math.log(b.count)) - (a.saturation * Math.log(a.count)))
-        .slice(0, 6)
-        .map(c => rgbToHex(c.r, c.g, c.b))
+        .filter(c => c.saturation > 0.15 && c.lightness > 0.12 && c.lightness < 0.88 && c.count > 15)
+        .sort((a, b) => (b.saturation * Math.log(b.count + 1)) - (a.saturation * Math.log(a.count + 1)))
       
-      resolve(colors)
+      // Deduplicate by hue - keep best color from each hue family
+      const hueFamilies = [] // Each family is ~60 degrees of hue
+      const selected = []
+      
+      for (const color of allColors) {
+        // Check if we already have a color with similar hue
+        const existingFamily = hueFamilies.find(h => {
+          const diff = Math.abs(h - color.hue)
+          return diff < 35 || diff > 325 // Within 35 degrees (wrap around for red)
+        })
+        
+        if (!existingFamily && selected.length < 6) {
+          selected.push(color)
+          hueFamilies.push(color.hue)
+        }
+      }
+      
+      resolve(selected.map(c => rgbToHex(c.r, c.g, c.b)))
     }
     img.onerror = () => resolve([])
     img.src = imageSrc
   })
+}
+
+// RGB to HSL conversion
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  let h, s, l = (max + min) / 2
+
+  if (max === min) {
+    h = s = 0
+  } else {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break
+      case g: h = ((b - r) / d + 2) / 6; break
+      case b: h = ((r - g) / d + 4) / 6; break
+    }
+    h *= 360
+  }
+  return { h, s, l }
 }
 
 // Detect background color from image edges
