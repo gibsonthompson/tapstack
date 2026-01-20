@@ -704,37 +704,112 @@ async function extractColorsFromImage(imageSrc) {
     img.onload = () => {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
+      const size = 150 // Resize for performance
+      canvas.width = size
+      canvas.height = size
+      ctx.drawImage(img, 0, 0, size, size)
       
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const pixels = imageData.data
+      const imageData = ctx.getImageData(0, 0, size, size).data
       
-      // Simple color extraction - get most common colors
+      // Detect background color from edges
+      const bgColor = detectBackgroundColor(ctx, size)
+      
       const colorCounts = {}
-      for (let i = 0; i < pixels.length; i += 4) {
-        const r = Math.round(pixels[i] / 32) * 32
-        const g = Math.round(pixels[i + 1] / 32) * 32
-        const b = Math.round(pixels[i + 2] / 32) * 32
-        const a = pixels[i + 3]
+      
+      for (let i = 0; i < imageData.length; i += 4) {
+        const r = imageData[i]
+        const g = imageData[i + 1]
+        const b = imageData[i + 2]
+        const a = imageData[i + 3]
         
-        if (a < 128) continue // Skip transparent
-        if (r > 240 && g > 240 && b > 240) continue // Skip white
-        if (r < 15 && g < 15 && b < 15) continue // Skip black
+        // Skip transparent
+        if (a < 128) continue
         
-        const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-        colorCounts[hex] = (colorCounts[hex] || 0) + 1
+        // Skip colors too close to background
+        if (bgColor) {
+          const dist = Math.sqrt(
+            Math.pow(r - bgColor.r, 2) + 
+            Math.pow(g - bgColor.g, 2) + 
+            Math.pow(b - bgColor.b, 2)
+          )
+          if (dist < 60) continue
+        }
+        
+        // Quantize to reduce noise
+        const qr = Math.min(240, Math.floor(r / 16) * 16)
+        const qg = Math.min(240, Math.floor(g / 16) * 16)
+        const qb = Math.min(240, Math.floor(b / 16) * 16)
+        const key = `${qr},${qg},${qb}`
+        colorCounts[key] = (colorCounts[key] || 0) + 1
       }
       
-      const sortedColors = Object.entries(colorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([color]) => color)
+      // Convert to HSL and filter for vibrant colors
+      const colors = Object.entries(colorCounts)
+        .map(([key, count]) => {
+          const [r, g, b] = key.split(',').map(Number)
+          const max = Math.max(r, g, b) / 255
+          const min = Math.min(r, g, b) / 255
+          const l = (max + min) / 2
+          const s = max === min ? 0 : l > 0.5 
+            ? (max - min) / (2 - max - min) 
+            : (max - min) / (max + min)
+          return { r, g, b, count, saturation: s, lightness: l }
+        })
+        // Filter: must be saturated and not too light/dark
+        .filter(c => c.saturation > 0.2 && c.lightness > 0.15 && c.lightness < 0.85 && c.count > 20)
+        // Sort by saturation * log(count) to favor vibrant + common
+        .sort((a, b) => (b.saturation * Math.log(b.count)) - (a.saturation * Math.log(a.count)))
+        .slice(0, 6)
+        .map(c => rgbToHex(c.r, c.g, c.b))
       
-      resolve(sortedColors)
+      resolve(colors)
     }
     img.onerror = () => resolve([])
     img.src = imageSrc
   })
+}
+
+// Detect background color from image edges
+function detectBackgroundColor(ctx, size) {
+  const edgePixels = []
+  
+  // Sample from all 4 edges
+  for (let i = 0; i < size; i += 5) {
+    edgePixels.push(ctx.getImageData(i, 0, 1, 1).data) // Top
+    edgePixels.push(ctx.getImageData(i, size - 1, 1, 1).data) // Bottom
+    edgePixels.push(ctx.getImageData(0, i, 1, 1).data) // Left
+    edgePixels.push(ctx.getImageData(size - 1, i, 1, 1).data) // Right
+  }
+  
+  // Check for transparency - if mostly transparent, assume white bg
+  const transparentCount = edgePixels.filter(p => p[3] < 128).length
+  if (transparentCount > edgePixels.length * 0.5) {
+    return { r: 255, g: 255, b: 255 }
+  }
+  
+  // Average the opaque edge colors
+  let r = 0, g = 0, b = 0, count = 0
+  edgePixels.forEach(p => {
+    if (p[3] >= 128) {
+      r += p[0]
+      g += p[1]
+      b += p[2]
+      count++
+    }
+  })
+  
+  if (count > 0) {
+    return { 
+      r: Math.round(r / count), 
+      g: Math.round(g / count), 
+      b: Math.round(b / count) 
+    }
+  }
+  
+  return { r: 255, g: 255, b: 255 }
+}
+
+// Convert RGB to hex
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
 }
