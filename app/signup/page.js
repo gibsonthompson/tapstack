@@ -365,6 +365,13 @@ function StepBranding({ formData, updateFormData, onNext, onBack, setError }) {
         )}
       </div>
 
+      {/* Logo Tips */}
+      <div className="p-3 bg-cream/5 border border-cream/10 rounded-xl">
+        <p className="text-cream/60 text-xs">
+          💡 <span className="text-cream/80 font-medium">Tip:</span> For best results, use a PNG with a transparent background. This ensures your logo looks great on any background color.
+        </p>
+      </div>
+
       {/* Extracting indicator */}
       {isExtracting && (
         <div className="text-center text-cream/60 text-sm">
